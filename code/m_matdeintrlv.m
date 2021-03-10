@@ -1,4 +1,4 @@
-function deintrlvd = matdeintrlv(data,Nrows,Ncols)
+function deintrlvd = m_matdeintrlv(data,Nrows,Ncols)
     if isvector(data) % data is a vector
         assert(numel(data) == Nrows*Ncols);
     elseif ismatrix(data) % data is a matrix

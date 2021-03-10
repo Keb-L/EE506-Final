@@ -1,4 +1,4 @@
-function intrlvd = matintrlv(data,Nrows,Ncols)
+function intrlvd = m_matintrlv(data,Nrows,Ncols)
     if isvector(data) % data is a vector
         assert(numel(data) == Nrows*Ncols);
     elseif ismatrix(data) % data is a matrix
