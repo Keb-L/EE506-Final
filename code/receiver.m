@@ -51,12 +51,7 @@ x_dec = qamdemod(x_rrc,M);
 
 %% Deinterleaver
 
-x_deintrlvd = matdeintrlv(x_sp, 4,2); % Interleave.
-
-%% Channel Decoding
-
-
-%% Guard remover
+x_deintrlvd = matdeintrlv(x_sp, 4,2); % Deinterleave.
 
 
 
