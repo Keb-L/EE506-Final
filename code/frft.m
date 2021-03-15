@@ -10,6 +10,7 @@ f = f(:);
 N = length(f);
 shft = rem((0:N-1)+fix(N/2),N)+1;
 sN = sqrt(N);
+
 a = mod(a,4);
 
 % do special cases
@@ -43,6 +44,7 @@ Faf = chrp.*Faf;
 
 % normalizing constant
 Faf = exp(-i*(1-a)*pi/4)*Faf(N:2:end-N+1);
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 function xint=interp(x)
