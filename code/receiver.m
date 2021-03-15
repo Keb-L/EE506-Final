@@ -22,7 +22,7 @@ rolloff = 0.25; % Filter rolloff
 span = 6;       % Filter span
 sps = 4;        % Samples per symbol
 
-% num_guard = nSamp*span/2; % G - guard bits
+num_guard = sps*span/2; % G - guard bits
 
 % Random bitstream generator
 x = randi([0, 1], k*(num_chirps-1), 1);
