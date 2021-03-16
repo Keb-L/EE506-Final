@@ -31,19 +31,19 @@ sina = sin(alpha);
 f = [zeros(N-1,1) ; interp(f) ; zeros(N-1,1)];
 
 % chirp premultiplication
-chrp = exp(-i*pi/N*tana2/4*(-2*N+2:2*N-2)'.^2);
+chrp = exp(-1i*pi/N*tana2/4*(-2*N+2:2*N-2)'.^2);
 f = chrp.*f;
 
 % chirp convolution
 c = pi/N/sina/4;
-Faf = fconv(exp(i*c*(-(4*N-4):4*N-4)'.^2),f);
+Faf = fconv(exp(1i*c*(-(4*N-4):4*N-4)'.^2),f);
 Faf = Faf(4*N-3:8*N-7)*sqrt(c/pi);
 
 % chirp post multiplication
 Faf = chrp.*Faf;
 
 % normalizing constant
-Faf = exp(-i*(1-a)*pi/4)*Faf(N:2:end-N+1);
+Faf = exp(-1i*(1-a)*pi/4)*Faf(N:2:end-N+1);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
