@@ -12,12 +12,16 @@ numSC = 64;           % Number of OFDM subcarriers
 cpLen = 16;            % OFDM cyclic prefix length
 
 % Rician Channel
-delayVector = (0:5:15)*1e-6; % Discrete delays of four-path channel (s)
-gainVector  = [0 -3 -6 -9];  % Average path gains (dB)
+Fs = 20e3;
+delayVector = 0; % Discrete delays of four-path channel (s)
+gainVector  = 0;  % Average path gains (dB)
 
 % AWGN channel
-awgnSNR = 15; % 15 dB
+awgnSNR = 50; % dB
 
+% Preamble
+barker = comm.BarkerCode(...
+    'Length',13,'SamplesPerFrame',13);  % For preamble
 %% System objects
 ofdmMod = comm.OFDMModulator('FFTLength', numSC, ...
                              'CyclicPrefixLength',cpLen, ...
@@ -27,41 +31,15 @@ ofdmMod = comm.OFDMModulator('FFTLength', numSC, ...
 ofdmDemod = comm.OFDMDemodulator('FFTLength',numSC,'CyclicPrefixLength',cpLen, ...
                                  'PilotOutputPort', false);                         
                          
-ricianChan = comm.RicianChannel('SampleRate', 20e3, ...
+ricianChan = comm.RicianChannel('SampleRate', Fs, ...
+                                'KFactor', 3, ...
+                                'RandomStream','mt19937ar with seed', ...
                                 'PathDelays',delayVector, ...
                                 'AveragePathGains',gainVector, ...
-                                'KFactor', 3, ...
-                                'MaximumDopplerShift', 0, ...
-                                'RandomStream','mt19937ar with seed', ...
                                 'Seed', 42);
-refConst = qammod(0:M-1, M);
-constDiag = comm.ConstellationDiagram( ...
-    'Name','Received Signal After Rician Fading', ...
-    'XLimits',[-5, 5],'YLimits',[-5 5], ...
-    'ReferenceConstellation',refConst);    
 
-constDiag2 = comm.ConstellationDiagram( ...
-    'Name','Received Signal After Rician Fading', ...
-    'XLimits',[-5, 5],'YLimits',[-5 5], ...
-    'ReferenceConstellation',refConst);  
-                        
 carrierSync = comm.CarrierSynchronizer( ...
-    'DampingFactor',0.4,'NormalizedLoopBandwidth',0.001, ...
     'SamplesPerSymbol', 1,'Modulation','QAM');    
-
-dataMod = @(d) qammod(d, M);
-dataDemod = @(d) qamdemod(d, M);
-
-channel = @(sig, snr) awgn( ricianChan(sig), snr, 'measured' );
-
-%% Train synchronizer
-for i = 1:100
-syms = get_random_symbols(80, M, dataMod);
-syms_ch = channel(syms, 15);
-
-syms_carrier = carrierSync(syms_ch);
-end
-display("Done");
 
 %% Derived parameters
 
@@ -69,15 +47,49 @@ display("Done");
 ofdmDims = info(ofdmMod);
 numDC = ofdmDims.DataInputSize(1);
 % numPilot = ofdmDims.PilotInputSize(1);
-frameSize = [k*numDC 1];
+frameSize = [numDC 1];
+
+%% Train synchronizer
+N = 200; % train with 200 frames
+preamble = (1+barker())/2;  % Length 13, unipolar
+txData = zeros(frameSize(1)*N, frameSize(2));
+for i = 1 : N
+    payload = randi([0 M-1],frameSize-[barker.Length, 0]);
+    txData((i-1)*frameSize(1) + (1:frameSize(1))) = [preamble; payload];
+end
+
+% Modulate
+txSym = qammod(txData, M);  % Symbol modulation
+
+% compute OFDM on each frame
+for i = 1:N          
+    iData = 1 + (i-1)*53:i*53;
+    iOFDM = 1 + (i-1)*80:i*80;
+    txSig(iOFDM, 1) = ofdmMod(txSym(iData));   % Apply OFDM modulation
+end
+
+% Channel effects
+fadedSig = ricianChan(txSig);                   % Rician Channel
+awgnSig = awgn(fadedSig, awgnSNR, 'measured');  % AWGN Channel
+rxSig = awgnSig;
+
+% Demodulate every frame
+for i = 1:N          
+iData = 1 + (i-1)*53:i*53;
+iOFDM = 1 + (i-1)*80:i*80;
+rxDemod(iData, 1) = ofdmDemod(rxSig(iOFDM));   % Apply OFDM modulation
+end
+
+% Train carrier synchronizer
+rxSync = carrierSync(rxDemod);
 
 %% Main Loop
-
-dataBin = randi([0,1],frameSize);         % Generate binary data
-txData = bi2de(reshape(dataBin, [], k));  % Reshape and convert to decimal
+payload = randi([0,M-1],frameSize-[barker.Length, 0]);         % Generate binary data
+preamble = (1+barker())/2;  % Length 13, unipolar
+txData = [preamble; payload];
 
 % Transmitter
-txSym = dataMod(txData);  % Symbol modulation
+txSym = qammod(txData, M);  % Symbol modulation
 txSig = ofdmMod(txSym);   % Apply OFDM modulation
 
 % Channel effects
@@ -86,16 +98,24 @@ awgnSig = awgn(fadedSig, awgnSNR, 'measured');  % AWGN Channel
 rxSig = awgnSig;
 
 % Receiver
-% TODO: Symbol synchronization + phase compensation
-rxCarrier = step(carrierSync, rxSig);
-rxSync = rxCarrier;
+rxDemod = ofdmDemod(rxSig);
+% Phase compensation
+rxSync = carrierSync(rxDemod);
 
-rxSym = ofdmDemod(rxSync);
-rxData = dataDemod(rxSym);
+rxData = qamdemod(rxSync, M);
 
+[syncDataTtlErr,syncDataBER] = biterr(txData,rxData);
+fprintf("Total bit errors: %d, bit error rate %f\n", syncDataTtlErr, syncDataBER);
 
-%% Utility
-function syms = get_random_symbols(N, M, fsym)
-    data = randi([0, M-1], N, 1);
-    syms = fsym(data);
-end
+%%
+% % Correct angle
+phOffset = barker_phase_correction(txSym, rxSync, barker);
+
+% Apply phase offset
+resPhzSig = exp(1i*phOffset) * rxSync;
+% Demodulate
+resPhzData = qamdemod(resPhzSig,M);
+% Compute bit errors
+[resPhzTtlErr, resPhzBER] = biterr(txData,resPhzData);
+fprintf("Total bit errors: %d, bit error rate %f\n", resPhzTtlErr, resPhzBER);
+
