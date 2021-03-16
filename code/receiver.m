@@ -12,6 +12,7 @@ clear all; close all; clc;
 % num_frame = 10;
 % frame_size = 16;
 num_pilot = 4;
+a = 0.4;
 
 M = 16;           % QPSK/4QAM
 k = log2(M); % bits/symbol
@@ -38,7 +39,7 @@ x_sp = reshape(x, num_chirps-1, k);
 %% Inverse FrFT
 
 % perform ifrft on x_sp
-% x_sp_ifrft = 
+% x_sp_ifrft = frft(x_sp,-a);
 
 %% RRC Filter
 
