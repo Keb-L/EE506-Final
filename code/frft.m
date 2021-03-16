@@ -14,6 +14,7 @@ sN = sqrt(N);
 a = mod(a,4);
 
 % do special cases
+
 if (a==0), Faf = f; return; end;
 if (a==2), Faf = flipud(f); return; end;
 if (a==1), Faf(shft,1) = fft(f(shft))/sN; return; end 
