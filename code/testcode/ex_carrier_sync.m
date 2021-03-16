@@ -10,6 +10,8 @@ msgLen = 53*N;
 numFrames = N;
 frameLen = msgLen/numFrames;
 
+awgnSNR = 20;
+
 %% Create data stream
 preamble = (1+barker())/2;  % Length 13, unipolar
 data = zeros(msgLen,1);
@@ -38,14 +40,14 @@ gainVector  = 0;%[0 -3 -6 -9]; % Average path gains (dB)
 Fs = 20e3;
 
 ricianChan = comm.RicianChannel('SampleRate', Fs, ...
-                                'KFactor', 5, ...
+                                'KFactor', 3, ...
                                 'RandomStream','mt19937ar with seed', ...
                                 'PathDelays',delayVector, ...
                                 'AveragePathGains',gainVector, ...
                                 'Seed', 42);
                             
 fadedSig = ricianChan(txSig);           % Apply channel effects
-awgnSig  = awgn(fadedSig,50,'measured');     % Add Gaussian noise
+awgnSig  = awgn(fadedSig, awgnSNR,'measured');     % Add Gaussian noise
 
 scatterplot(awgnSig);
 title('AWGN signal');

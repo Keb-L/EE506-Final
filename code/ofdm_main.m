@@ -3,6 +3,8 @@ clear all; close all; clc;
 %% Parameters
 rng(42); % Set the random seed 
 
+N = 200; % train with 200 frames
+
 % Modulation
 M = 16;      % 16 symbols
 k = log2(M); % bits per symbol
@@ -15,9 +17,10 @@ cpLen = 16;            % OFDM cyclic prefix length
 Fs = 20e3;
 delayVector = 0; % Discrete delays of four-path channel (s)
 gainVector  = 0;  % Average path gains (dB)
+ricianK = 3;        
 
 % AWGN channel
-awgnSNR = 50; % dB
+awgnSNR = 15; % dB
 
 % Preamble
 barker = comm.BarkerCode(...
@@ -32,7 +35,7 @@ ofdmDemod = comm.OFDMDemodulator('FFTLength',numSC,'CyclicPrefixLength',cpLen, .
                                  'PilotOutputPort', false);                         
                          
 ricianChan = comm.RicianChannel('SampleRate', Fs, ...
-                                'KFactor', 3, ...
+                                'KFactor', ricianK, ...
                                 'RandomStream','mt19937ar with seed', ...
                                 'PathDelays',delayVector, ...
                                 'AveragePathGains',gainVector, ...
@@ -50,7 +53,6 @@ numDC = ofdmDims.DataInputSize(1);
 frameSize = [numDC 1];
 
 %% Train synchronizer
-N = 200; % train with 200 frames
 preamble = (1+barker())/2;  % Length 13, unipolar
 txData = zeros(frameSize(1)*N, frameSize(2));
 for i = 1 : N
@@ -83,6 +85,14 @@ end
 % Train carrier synchronizer
 rxSync = carrierSync(rxDemod);
 
+scatterplot(rxDemod(end-numDC*10+1:end));
+title('Before phase correction 1');
+
+scatterplot(rxSync(end-numDC*10+1:end));
+title('After phase correction 1');
+
+phOffset = barker_phase_correction(txSym, rxDemod, barker);
+
 %% Main Loop
 payload = randi([0,M-1],frameSize-[barker.Length, 0]);         % Generate binary data
 preamble = (1+barker())/2;  % Length 13, unipolar
@@ -99,13 +109,24 @@ rxSig = awgnSig;
 
 % Receiver
 rxDemod = ofdmDemod(rxSig);
+
+scatterplot(rxDemod);
+title('Before phase correction');
+
+rxNoSync = qamdemod(rxDemod, M);
+[nosyncDataTtlErr,nosyncDataBER] = biterr(txData,rxNoSync);
+fprintf("(Pre-carrier sync) Total bit errors: %d, bit error rate %f\n", nosyncDataTtlErr, nosyncDataBER);
+
 % Phase compensation
 rxSync = carrierSync(rxDemod);
+
+scatterplot(rxSync);
+title('Phase corrected');
 
 rxData = qamdemod(rxSync, M);
 
 [syncDataTtlErr,syncDataBER] = biterr(txData,rxData);
-fprintf("Total bit errors: %d, bit error rate %f\n", syncDataTtlErr, syncDataBER);
+fprintf("(Carrier Sync) Total bit errors: %d, bit error rate %f\n", syncDataTtlErr, syncDataBER);
 
 %%
 % % Correct angle
@@ -117,5 +138,5 @@ resPhzSig = exp(1i*phOffset) * rxSync;
 resPhzData = qamdemod(resPhzSig,M);
 % Compute bit errors
 [resPhzTtlErr, resPhzBER] = biterr(txData,resPhzData);
-fprintf("Total bit errors: %d, bit error rate %f\n", resPhzTtlErr, resPhzBER);
+fprintf("(Barker Phase correction) Total bit errors: %d, bit error rate %f\n", resPhzTtlErr, resPhzBER);
 
