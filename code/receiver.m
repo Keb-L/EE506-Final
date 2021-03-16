@@ -58,7 +58,7 @@ x_deintrlvd = matdeintrlv(x_sp, 4,2); % Deinterleave.
 
 %% Parallel to Serial --> Demodulated Data
 
-x = reshape(x_deintrlvd, (num_xhirps-1)*k,1);
+x = reshape(x_deintrlvd, (num_chirps-1)*k,1);
 
 
 
