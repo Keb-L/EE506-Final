@@ -4,7 +4,7 @@
 % OFDM Main
 
 
-clear all; close all; clc;
+% clear all; close all; clc;
 
 %% Parameters
 rng(42); % Set the random seed 
@@ -14,23 +14,30 @@ N = 200; % train with 200 frames
 % Modulation
 M = 16;      % 16 symbols
 k = log2(M); % bits per symbol
+sps = 1;
 
 % OFDM
 numSC = 64;           % Number of OFDM subcarriers
 cpLen = 16;            % OFDM cyclic prefix length
 
 % Rician Channel
-Fs = 20e3;
+Fs = 1;
 delayVector = 0; %(0:5:15)*1e-6; % Discrete delays of four-path channel (s)
 gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)
-ricianK = 1;        
+ricianKdB = 1;  
+fD = 0;
+
+ricianK = 10.^(ricianKdB/10);
 
 % AWGN channel
-awgnSNR = 5; % dB
+EbN0 = 10; % dB
+awgnSNR = EbN0+10*log10(k)-10*log10(sps);
 
 % Preamble
 barker = comm.BarkerCode(...
     'Length',13,'SamplesPerFrame',13);  % For preamble
+
+
 %% System objects
 ofdmMod = comm.OFDMModulator('FFTLength', numSC, ...
                              'CyclicPrefixLength',cpLen, ...
@@ -45,6 +52,7 @@ ricianChan = comm.RicianChannel('SampleRate', Fs, ...
                                 'RandomStream','mt19937ar with seed', ...
                                 'PathDelays',delayVector, ...
                                 'AveragePathGains',gainVector, ...
+                                'MaximumDopplerShift', fD, ...
                                 'PathGainsOutputPort', 1, ...
                                 'Seed', 42);                 
 % constDiag = comm.ConstellationDiagram(  'ReferenceConstellation', qammod(0:M-1,M), ...
@@ -101,6 +109,7 @@ rxSym(iData, 1) = ofdmDemod(rxSig(iOFDM));   % Apply OFDM modulation
 
 [dPhArr(i), dPwrArr(i)] = barker_phase_correction(txSym(iData), rxSym(iData), barker);
 end
+angle(chanGains(1))
 
 rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym;     % Perfect CSI
 rxSymBarker = mean(dPwrArr).*exp(1i*mean(dPhArr)).*rxSym; % Barker Preamble correction
@@ -112,63 +121,63 @@ rxDataBarker = qamdemod(rxSymBarker, M);
 
 % Outputs
 scatterplot(rxSym); title('Before phase correction');
-scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
+% scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
 scatterplot(rxSymBarker); title('After preamble phase correction');
-
+% 
 [nerr,ber] = biterr(txData, rxData);
 fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
-
+% 
 [nerr,ber] = biterr(txData, rxDataBarker);
 fprintf("(Preamble correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
-% Train carrier synchronizer
-% rxSync = carrierSync(rxDemod);
+% % Train carrier synchronizer
+% % rxSync = carrierSync(rxDemod);
+% % 
+% % scatterplot(rxDemod(end-numDC*10+1:end));
+% % title('Before phase correction 1');
+% % 
+% % scatterplot(rxSync(end-numDC*10+1:end));
+% % title('After phase correction 1');
 % 
-% scatterplot(rxDemod(end-numDC*10+1:end));
-% title('Before phase correction 1');
+% % phOffset = barker_phase_correction(txSym, rxDemod, barker);
 % 
-% scatterplot(rxSync(end-numDC*10+1:end));
-% title('After phase correction 1');
-
-% phOffset = barker_phase_correction(txSym, rxDemod, barker);
-
-%% Main Loop
-nErrors = zeros(N, 1);
-
-payload = randi([0,M-1],frameSize-[barker.Length, 0]);         % Generate binary data
-preamble = (1+barker())/2;  % Length 13, unipolar
-txData = [preamble; payload];
-
-% Transmitter
-txSym = qammod(txData, M);  % Symbol modulation
-txSig = ofdmMod(txSym);   % Apply OFDM modulation
-
-% Channel effects
-[fadedSig, chanGains] = ricianChan(txSig);      % Rician Channel
-awgnSig = awgn(fadedSig, awgnSNR, 'measured');  % AWGN Channel
-rxSig = awgnSig;
-
-% Receiver
-rxSym = ofdmDemod(rxSig);
-
-[dPh, dPwr] = barker_phase_correction(txSym, rxSym, barker);
-% Correction
-rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym; % Perfect CSI
-rxSymBarker = dPwr.*exp(1i*dPh).*rxSym;
-% Phase compensation
-% rxSync = carrierSync(rxDemod);
-
-rxData = qamdemod(rxSym, M);
-rxDataCSI = qamdemod(rxSymCSI, M);
-rxDataBarker = qamdemod(rxSymBarker, M);
-
-
-%% Outputs
-scatterplot(rxSym); title('Before phase correction');
-scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
-scatterplot(rxSymBarker); title('After barker correction');
-
-[nerr,ber] = biterr(txData, rxData);
-fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
-
-[nerr,ber] = biterr(txData, rxDataBarker);
-fprintf("(Preamble correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
+% %% Main Loop
+% nErrors = zeros(N, 1);
+% 
+% payload = randi([0,M-1],frameSize-[barker.Length, 0]);         % Generate binary data
+% preamble = (1+barker())/2;  % Length 13, unipolar
+% txData = [preamble; payload];
+% 
+% % Transmitter
+% txSym = qammod(txData, M);  % Symbol modulation
+% txSig = ofdmMod(txSym);   % Apply OFDM modulation
+% 
+% % Channel effects
+% [fadedSig, chanGains] = ricianChan(txSig);      % Rician Channel
+% awgnSig = awgn(fadedSig, awgnSNR, 'measured');  % AWGN Channel
+% rxSig = awgnSig;
+% 
+% % Receiver
+% rxSym = ofdmDemod(rxSig);
+% 
+% [dPh, dPwr] = barker_phase_correction(txSym, rxSym, barker);
+% % Correction
+% rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym; % Perfect CSI
+% rxSymBarker = dPwr.*exp(1i*dPh).*rxSym;
+% % Phase compensation
+% % rxSync = carrierSync(rxDemod);
+% 
+% rxData = qamdemod(rxSym, M);
+% rxDataCSI = qamdemod(rxSymCSI, M);
+% rxDataBarker = qamdemod(rxSymBarker, M);
+% 
+% 
+% %% Outputs
+% scatterplot(rxSym); title('Before phase correction');
+% scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
+% scatterplot(rxSymBarker); title('After barker correction');
+% 
+% [nerr,ber] = biterr(txData, rxData);
+% fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
+% 
+% [nerr,ber] = biterr(txData, rxDataBarker);
+% fprintf("(Preamble correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
