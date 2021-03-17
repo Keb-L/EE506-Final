@@ -5,15 +5,16 @@ rng(42); % Set the random seed, reproducible results
 
 %--------------------------------------------------------------------------
 % Monte Carlo Simulation parameters
-N = 1e5; % Frames per simulation
+N = 1e4; % Frames per simulation
 batch_size = 1e3; % Do batchs of batch_size at a time
+batch_iter = N / batch_size;
 
 ricianK = [1, 3, 5, 10, 30]; % ratio of signal power (dominant component) to scattered power dB
 awgnSNR = [0:5:30]; % ratio of signal power to noise power dB
 %--------------------------------------------------------------------------
 
 % Modulation
-M = 16;      % 16 symbols - 16QAM
+M = 4;      % 16 symbols - 16QAM
 k = log2(M); % bits per symbol
 
 % OFDM
@@ -65,15 +66,15 @@ for i = 1:numel(ricianK)
     for j = 1:numel(awgnSNR)
         fprintf("Simulating %d frames @ K = %d dB and awgnSNR = %d dB...\n", N, ricianK(i), awgnSNR(j));
         % Output values
-        frameErr = zeros(N/batch_size, 1);
-        frameBER = zeros(N/batch_size, 1);
+        frameErr = zeros(batch_iter, 1);
+        frameBER = zeros(batch_iter, 1);
         
         iter_start = tic;
         
         % For each frame
         fprintf("\t[");
-        for f = 1:(N/batch_size)
-            if (mod(f, N/batch_size/10) == 0)
+        for f = 1:(batch_iter)
+            if (mod(f, batch_iter/10) == 0)
                 fprintf(">");
             end
             
@@ -119,11 +120,18 @@ for i = 1:numel(ricianK)
         end
         fprintf("]\n");
         iter_time = toc(iter_start);
-        fprintf("Iteration took %f seconds, average time per batch %f seconds\n", iter_time, double(iter_time)/N*batch_size);
+        fprintf("Iteration took %f seconds, average time per batch %f seconds\n", iter_time, double(iter_time)/batch_iter);
         
         % Sum and average frame error -> BER
         TotalBits = N*numDC*k ; % Number of frames * number of symbols * bits per symbol
         nErrMat(i, j) = sum(frameErr);
         nBERMat(i, j) = nErrMat(i, j) / TotalBits;
+        
+        fprintf("Total Bit Errors: %d, Bit Error Rate %f...\n\n", nErrMat(i, j), nBERMat(i, j));
+        
+        % Create checkpoint
+        save('MonteCarloSim.mat', 'ricianK', 'awgnSNR', ...              % Axis parameters
+                                  'nErrMat', 'nBERMat', 'TotalBits', ... % Output values
+                                  'M', 'N', 'numSC', 'cpLen', 'Fs', 'delayVector', 'gainVector'); % Other parameters
     end
 end

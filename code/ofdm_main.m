@@ -26,7 +26,7 @@ gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)
 ricianK = 1;        
 
 % AWGN channel
-awgnSNR = 10; % dB
+awgnSNR = 5; % dB
 
 % Preamble
 barker = comm.BarkerCode(...
@@ -99,7 +99,7 @@ iData = 1 + (i-1)*53:i*53;
 iOFDM = 1 + (i-1)*80:i*80;
 rxSym(iData, 1) = ofdmDemod(rxSig(iOFDM));   % Apply OFDM modulation
 
-[dPwrArr(i), dPhArr(i)] = barker_phase_correction(txSym(iData), rxSym(iData), barker);
+[dPhArr(i), dPwrArr(i)] = barker_phase_correction(txSym(iData), rxSym(iData), barker);
 end
 
 rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym;     % Perfect CSI
