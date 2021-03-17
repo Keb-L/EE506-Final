@@ -15,12 +15,12 @@ cpLen = 16;            % OFDM cyclic prefix length
 
 % Rician Channel
 Fs = 20e3;
-delayVector = 0;%(0:5:15)*1e-6; % Discrete delays of four-path channel (s)
-gainVector  = 0;%[0 -3 -6 -9]; % Average path gains (dB)
-ricianK = 3;        
+delayVector = 0; %(0:5:15)*1e-6; % Discrete delays of four-path channel (s)
+gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)
+ricianK = 1;        
 
 % AWGN channel
-awgnSNR = 15; % dB
+awgnSNR = 10; % dB
 
 % Preamble
 barker = comm.BarkerCode(...
@@ -80,7 +80,7 @@ for i = 1:N
 end
 
 % Channel effects
-[fadedSig, gains] = ricianChan(txSig);                   % Rician Channel
+[fadedSig, chanGains] = ricianChan(txSig);                   % Rician Channel
 
 awgnSig = awgn(fadedSig, awgnSNR, 'measured');  % AWGN Channel
 rxSig = awgnSig;
@@ -96,12 +96,24 @@ rxSym(iData, 1) = ofdmDemod(rxSig(iOFDM));   % Apply OFDM modulation
 [dPwrArr(i), dPhArr(i)] = barker_phase_correction(txSym(iData), rxSym(iData), barker);
 end
 
-rxSym2 = mean(dPwrArr).*exp(1i*mean(dPhArr)).*rxSym;
+rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym;     % Perfect CSI
+rxSymBarker = mean(dPwrArr).*exp(1i*mean(dPhArr)).*rxSym; % Barker Preamble correction
 
+% Demodulate symbols
+rxData = qamdemod(rxSym, M);
+rxDataCSI = qamdemod(rxSymCSI, M);
+rxDataBarker = qamdemod(rxSymBarker, M);
+
+% Outputs
 scatterplot(rxSym); title('Before phase correction');
-scatterplot(rxSym2); title('After preamble phase correction');
+scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
+scatterplot(rxSymBarker); title('After preamble phase correction');
 
+[nerr,ber] = biterr(txData, rxData);
+fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
 
+[nerr,ber] = biterr(txData, rxDataBarker);
+fprintf("(Preamble correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
 % Train carrier synchronizer
 % rxSync = carrierSync(rxDemod);
 % 
@@ -134,7 +146,7 @@ rxSym = ofdmDemod(rxSig);
 
 [dPh, dPwr] = barker_phase_correction(txSym, rxSym, barker);
 % Correction
-rxSymCSI = exp(-1i*angle(mean(chanGains)))*rxSym; % Perfect CSI
+rxSymCSI = 1./sum(abs(mean(chanGains, 1))).*exp(-1i*sum(angle(mean(chanGains, 1)))).*rxSym; % Perfect CSI
 rxSymBarker = dPwr.*exp(1i*dPh).*rxSym;
 % Phase compensation
 % rxSync = carrierSync(rxDemod);
@@ -145,11 +157,12 @@ rxDataBarker = qamdemod(rxSymBarker, M);
 
 
 %% Outputs
-scatterplot(rxSym);
-title('Before phase correction');
+scatterplot(rxSym); title('Before phase correction');
+scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
+scatterplot(rxSymBarker); title('After barker correction');
 
-scatterplot(rxSymCSI);
-title('After phase correction (Perfect CSI)');
+[nerr,ber] = biterr(txData, rxData);
+fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
 
-scatterplot(rxSymBarker);
-title('After barker correction');
+[nerr,ber] = biterr(txData, rxDataBarker);
+fprintf("(Preamble correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
