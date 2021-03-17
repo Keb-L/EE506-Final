@@ -5,16 +5,16 @@ rng(42); % Set the random seed, reproducible results
 
 %--------------------------------------------------------------------------
 % Monte Carlo Simulation parameters
-N = 1e4; % Frames per simulation
+N = 1e5; % Frames per simulation
 batch_size = 1e3; % Do batchs of batch_size at a time
 batch_iter = N / batch_size;
 
-ricianKdB = [1, 3, 5, 10, 30]; % ratio of signal power (dominant component) to scattered power dB
-EbN0 = [0:1:10, 12:2:20, 25, 30]; % ratio of signal power to noise power dB
+ricianK = [0.1 1 5 10 30 100 1000]; % ratio of signal power (dominant component) to scattered power (linear)
+EbN0 = [0:1:10, 12:2:20 25 30]; % ratio of signal power to noise power dB
 %--------------------------------------------------------------------------
 
 % Modulation
-M = 4;      % 16 symbols - 16QAM
+M = 16;      % 16 symbols - 16QAM
 k = log2(M); % bits per symbol
 sps = 1;     % Samples per symbol
 
@@ -23,16 +23,20 @@ numSC = 64;     % Number of OFDM subcarriers
 cpLen = 16;     % OFDM cyclic prefix length
 
 % Rician Channel
-Fs = 20e3;
+Fs = 15*10^6;  % 15 MHz
 delayVector = 0; %(0:5:15)*1e-6; % Discrete delays of four-path channel (s)
-gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)     
-fD = 0; %Hz
+gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)    
+
+Fc = 2.4*10^9;  % Carrier frequency
+c = 3*10^8;     % Speed of light (m/s)
+v = (50*10^3)/3600;         % Velocity in m/s
+fD = 0.001+(v/c)*Fc; %Hz
 
 % Preamble
 barker = comm.BarkerCode(...
     'Length',13,'SamplesPerFrame',13);  % For preamble
 
-ricianK = 10.^(ricianKdB/10);
+% ricianK = 10.^(ricianKdB/10);
 awgnSNR = EbN0+10*log10(k)-10*log10(sps);
 
 
@@ -66,15 +70,17 @@ preamble = (1+barker())/2;  % Length 13, unipolar
 %% Monte Carlo Simulation
 nErrMat = zeros(numel(ricianK), numel(awgnSNR));
 nBERMat = zeros(numel(ricianK), numel(awgnSNR));
+nErrMatB = zeros(numel(ricianK), numel(awgnSNR));
+nBERMatB = zeros(numel(ricianK), numel(awgnSNR));
 
 for i = 1:numel(ricianK)
     ricianChan = hricianChan(ricianK(i));
     
     for j = 1:numel(awgnSNR)
-        fprintf("Simulating %d frames @ K = %d dB and Eb/N0 = %d dB...\n", N, ricianKdB(i), EbN0(j));
+        fprintf("Simulating %d frames @ K = %d and Eb/N0 = %d dB...\n", N, ricianK(i), EbN0(j));
         % Output values
-        frameErr = zeros(batch_iter, 1);
-        frameBER = zeros(batch_iter, 1);
+        frameErr = zeros(batch_iter, 1); frameErrB = zeros(batch_iter, 1);
+        frameBER = zeros(batch_iter, 1); frameBERB = zeros(batch_iter, 1);
         
         iter_start = tic;
         
@@ -95,11 +101,11 @@ for i = 1:numel(ricianK)
             txSym = qammod(txData, M);  % Symbol modulation
   
             % OFDM modulation   
-            txSig = txSym;
-%             txSig = zeros(ofdmDims.OutputSize(1), batch_size);
-%             for batch = 1:batch_size
-%                 txSig(:, batch) = ofdmMod(txSym(:, batch));
-%             end
+%             txSig = txSym;
+            txSig = zeros(ofdmDims.OutputSize(1), batch_size);
+            for batch = 1:batch_size
+                txSig(:, batch) = ofdmMod(txSym(:, batch));
+            end
 %             
             % Apply channel effects
             rxSig = zeros(size(txSig));
@@ -111,25 +117,24 @@ for i = 1:numel(ricianK)
 %             rxSig = awgn(txSig, awgnSNR(j), 'measured');  % AWGN Channel
                      
             % OFDM demodulation
-            rxSym = rxSig;
-%             rxSym = zeros(ofdmDims.DataInputSize(1), 1);
-%             rxSymBarker = zeros(ofdmDims.DataInputSize(1), batch_size);
-%             for batch = 1:batch_size
-% %                 rxSym = ofdmDemod(rxSig(:, batch));
-%                 rxSym(:, batch) = ofdmDemod(rxSig(:, batch));
-%                 
-%                 % Phase/Power correction
-% %                 [dPh, dPwr] = barker_phase_correction(txSym(:, batch), rxSym, barker); % Barker Preamble correction
-% %                 rxSymBarker(:, batch) = mean(dPwr).*exp(1i*mean(dPh)).*rxSym; 
-%             end
+%             rxSym = rxSig;
+            rxSym = zeros(ofdmDims.DataInputSize(1), batch_size);
+            rxSymBarker = zeros(ofdmDims.DataInputSize(1), batch_size);
+            for batch = 1:batch_size
+                rxSym(:, batch) = ofdmDemod(rxSig(:, batch));
+                
+                % Phase/Power correction
+                [dPh, dPwr] = barker_phase_correction(txSym(:, batch), rxSym(:, batch), barker); % Barker Preamble correction
+                rxSymBarker(:, batch) = mean(dPwr).*exp(1i*mean(dPh)).*rxSym(:, batch); 
+            end
             
             % Symbol Demodulation
             rxData = qamdemod(rxSym, M);
-%             rxDataBarker = qamdemod(rxSymBarker, M);
+            rxDataBarker = qamdemod(rxSymBarker, M);
             
             % Compute outputs
             [frameErr(f), frameBER(f)] = biterr(txData, rxData);
-%             [frameErr(f), frameBER(f)] = biterr(txData, rxDataBarker);
+            [frameErrB(f), frameBERB(f)] = biterr(txData, rxDataBarker);
             
         end
         fprintf("]\n");
@@ -139,13 +144,15 @@ for i = 1:numel(ricianK)
         % Sum and average frame error -> BER
         TotalBits = N*numDC*k ; % Number of frames * number of symbols * bits per symbol
         nErrMat(i, j) = sum(frameErr);
+        nErrMatB(i, j) = sum(frameErrB);
         nBERMat(i, j) = nErrMat(i, j) / TotalBits;
+        nBERMatB(i, j) = nErrMatB(i, j) / TotalBits;
         
         fprintf("Total Bit Errors: %d, Bit Error Rate %f...\n\n", nErrMat(i, j), nBERMat(i, j));
         
         % Create checkpoint
-        save('MonteCarloSim.mat', 'ricianK', 'ricianKdB', 'awgnSNR', 'EbN0', ...              % Axis parameters
-                                  'nErrMat', 'nBERMat', 'TotalBits', ... % Output values
+        save('MonteCarloSim.mat', 'ricianK', 'awgnSNR', 'EbN0', ...              % Axis parameters
+                                  'nErrMat', 'nBERMat', 'nErrMatB', 'nBERMatB', 'TotalBits', ... % Output values
                                   'M', 'N', 'numSC', 'cpLen', 'Fs', 'delayVector', 'gainVector'); % Other parameters
     end
 end

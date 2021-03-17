@@ -7,7 +7,7 @@
 % clear all; close all; clc;
 
 %% Parameters
-rng(42); % Set the random seed 
+% rng(42); % Set the random seed 
 
 N = 200; % train with 200 frames
 
@@ -21,16 +21,20 @@ numSC = 64;           % Number of OFDM subcarriers
 cpLen = 16;            % OFDM cyclic prefix length
 
 % Rician Channel
-Fs = 1;
+Fs = 15*10^6;  
 delayVector = 0; %(0:5:15)*1e-6; % Discrete delays of four-path channel (s)
 gainVector  = 0; %[0 -3 -6 -9]; % Average path gains (dB)
-ricianKdB = 1;  
-fD = 0;
+ricianK = 10;  
 
-ricianK = 10.^(ricianKdB/10);
+Fc = 2.4*10^9;  % Carrier frequency
+c = 3*10^8;     % Speed of light (m/s)
+v = (50*10^3)/3600;         % Velocity in m/s
+fD = 0.001+(v/c)*Fc; %Hz
+
+ricianKdB = 10*log10(ricianK);
 
 % AWGN channel
-EbN0 = 10; % dB
+EbN0 = 20; % dB
 awgnSNR = EbN0+10*log10(k)-10*log10(sps);
 
 % Preamble
@@ -122,7 +126,7 @@ rxDataBarker = qamdemod(rxSymBarker, M);
 % Outputs
 scatterplot(rxSym); title('Before phase correction');
 % scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
-scatterplot(rxSymBarker); title('After preamble phase correction');
+% scatterplot(rxSymBarker); title('After preamble phase correction');
 % 
 [nerr,ber] = biterr(txData, rxData);
 fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
