@@ -1,3 +1,9 @@
+% "Waveform design for communicating radar systems using Fractional Fourier Transform" Simulation
+% Kelvin Lin, Ali Alansari
+% EE 506 Winter 2021
+% OFDM Main
+
+
 clear all; close all; clc;
 
 %% Parameters
