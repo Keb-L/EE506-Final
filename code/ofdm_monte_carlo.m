@@ -9,7 +9,7 @@ N = 1e5; % Frames per simulation
 batch_size = 1e3; % Do batchs of batch_size at a time
 batch_iter = N / batch_size;
 
-ricianK = [0.1 1 5 10 30 100 1000]; % ratio of signal power (dominant component) to scattered power (linear)
+ricianKdB = [0 3 10 14 17 20 30]; % ratio of signal power (dominant component) to scattered power (linear)
 EbN0 = [0:1:10, 12:2:20 25 30]; % ratio of signal power to noise power dB
 %--------------------------------------------------------------------------
 
@@ -32,9 +32,12 @@ c = 3*10^8;     % Speed of light (m/s)
 v = (50*10^3)/3600;         % Velocity in m/s
 fD = 0.001+(v/c)*Fc; %Hz
 
+ricianK = 10.^(ricianKdB/10);
+
 % Preamble
+barkerN = 2;
 barker = comm.BarkerCode(...
-    'Length',13,'SamplesPerFrame',13);  % For preamble
+    'Length',barkerN,'SamplesPerFrame',barkerN);  % For preamble
 
 % ricianK = 10.^(ricianKdB/10);
 awgnSNR = EbN0+10*log10(k)-10*log10(sps);
@@ -109,11 +112,14 @@ for i = 1:numel(ricianK)
 %             
             % Apply channel effects
             rxSig = zeros(size(txSig));
-            for batch = 1:batch_size
-                [fadedSig, chanGains] = ricianChan(txSig(:, batch));         % Rician Channel
-                awgnSig = awgn(fadedSig, awgnSNR(j), 'measured');  % AWGN Channel
-                rxSig(:, batch) = awgnSig;
-            end
+            [fadedSig, chanGains] = ricianChan(txSig(:));  
+            awgnSig = awgn(fadedSig, awgnSNR(j), 'measured');  % AWGN Channel 
+            rxSig = reshape(awgnSig, ofdmDims.OutputSize(1), batch_size);
+%             for batch = 1:batch_size
+%                 [fadedSig, chanGains] = ricianChan(txSig(:, batch));         % Rician Channel
+%                 awgnSig = awgn(fadedSig, awgnSNR(j), 'measured');  % AWGN Channel
+%                 rxSig(:, batch) = awgnSig;
+%             end
 %             rxSig = awgn(txSig, awgnSNR(j), 'measured');  % AWGN Channel
                      
             % OFDM demodulation
@@ -151,7 +157,7 @@ for i = 1:numel(ricianK)
         fprintf("Total Bit Errors: %d, Bit Error Rate %f...\n\n", nErrMat(i, j), nBERMat(i, j));
         
         % Create checkpoint
-        save('MonteCarloSim.mat', 'ricianK', 'awgnSNR', 'EbN0', ...              % Axis parameters
+        save('MonteCarloSim.mat', 'ricianK', 'ricianKdB', 'awgnSNR', 'EbN0', ...              % Axis parameters
                                   'nErrMat', 'nBERMat', 'nErrMatB', 'nBERMatB', 'TotalBits', ... % Output values
                                   'M', 'N', 'numSC', 'cpLen', 'Fs', 'delayVector', 'gainVector'); % Other parameters
     end

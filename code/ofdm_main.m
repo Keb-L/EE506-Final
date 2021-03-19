@@ -34,7 +34,7 @@ fD = 0.001+(v/c)*Fc; %Hz
 ricianKdB = 10*log10(ricianK);
 
 % AWGN channel
-EbN0 = 20; % dB
+EbN0 = 100; % dB
 awgnSNR = EbN0+10*log10(k)-10*log10(sps);
 
 % Preamble
@@ -56,6 +56,7 @@ ricianChan = comm.RicianChannel('SampleRate', Fs, ...
                                 'RandomStream','mt19937ar with seed', ...
                                 'PathDelays',delayVector, ...
                                 'AveragePathGains',gainVector, ...
+                                'DirectPathDopplerShift', 0, ...
                                 'MaximumDopplerShift', fD, ...
                                 'PathGainsOutputPort', 1, ...
                                 'Seed', 42);                 
@@ -124,9 +125,14 @@ rxDataCSI = qamdemod(rxSymCSI, M);
 rxDataBarker = qamdemod(rxSymBarker, M);
 
 % Outputs
-scatterplot(rxSym); title('Before phase correction');
+scatterplot(txSym); title('QAM Modulation');
+scatterplot(txSig); title('OFDM Modulation');
+scatterplot(fadedSig); title('Rician Fading');
+scatterplot(awgnSig); title('AWGN');
+scatterplot(rxSig); title('OFDM Demodulation');
+scatterplot(rxSym); title('Received symbols (before correction)');
 % scatterplot(rxSymCSI); title('After phase correction (Perfect CSI)');
-% scatterplot(rxSymBarker); title('After preamble phase correction');
+scatterplot(rxSymBarker); title('After preamble phase correction');
 % 
 [nerr,ber] = biterr(txData, rxData);
 fprintf("(No correction) Bit Error Count: %d, Bit Error Rate (BER) %f\n", nerr, ber);
